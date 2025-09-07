@@ -1,75 +1,54 @@
+import fetchPage from '../utils/fetchPage.js';
+import parseHtml from '../utils/parseHtml.js';
+import detectIntent from '../utils/detectIntent.js';
+import extractSections from '../utils/extractSections.js';
+
 function addSEOEvaluations(data, keyword) {
   const evaluations = {};
 
-  // Debug log to see what data we're getting
-  console.log('Worker data keys:', Object.keys(data));
-  console.log('Metadata:', data.metadata);
-  console.log('HeadingStats:', data.headingStats);
-
   // Title evaluation
-  if (data.metadata?.title) {
-    const title = data.metadata.title;
-    const hasKeyword = keyword && title.toLowerCase().includes(keyword.toLowerCase());
+  if (data.metadata?.raw?.title) {
+    const title = data.metadata.raw.title;
     const length = title.length;
+    const hasKeyword = keyword && title.toLowerCase().includes(keyword.toLowerCase());
     let status = '✅';
     
-    if (length < 30) {
-      status = '⚠️';
-    } else if (length > 60) {
-      status = '⚠️';
-    } else if (!hasKeyword && keyword) {
-      status = '❌';
-    }
+    if (length < 30 || length > 60) status = '⚠️';
+    if (!hasKeyword && keyword) status = '❌';
     
     evaluations.title = {
       value: title,
       length: `${length} characters`,
-      hasKeyword: hasKeyword,
-      status: status
+      hasKeyword,
+      status
     };
   } else {
-    evaluations.title = {
-      value: 'Not found',
-      status: '❌'
-    };
+    evaluations.title = { value: 'Missing', status: '❌' };
   }
 
   // Meta description evaluation
-  if (data.metadata?.description) {
-    const desc = data.metadata.description;
-    const hasKeyword = keyword && desc.toLowerCase().includes(keyword.toLowerCase());
+  if (data.metadata?.raw?.description) {
+    const desc = data.metadata.raw.description;
     const length = desc.length;
+    const hasKeyword = keyword && desc.toLowerCase().includes(keyword.toLowerCase());
     let status = '✅';
     
-    if (length < 120) {
-      status = '⚠️';
-    } else if (length > 160) {
-      status = '⚠️';
-    } else if (!hasKeyword && keyword) {
-      status = '⚠️';
-    }
+    if (length < 120 || length > 160) status = '⚠️';
+    if (!hasKeyword && keyword) status = '⚠️';
     
     evaluations.metaDescription = {
       value: desc,
       length: `${length} characters`,
-      hasKeyword: hasKeyword,
-      status: status
+      hasKeyword,
+      status
     };
   } else {
-    evaluations.metaDescription = {
-      value: 'Not found',
-      status: '❌'
-    };
+    evaluations.metaDescription = { value: 'Missing', status: '❌' };
   }
 
   // H1 evaluation
-  const h1Count = data.headingStats?.h1 || 0;
-  let h1Status = '✅';
-  if (h1Count === 0) {
-    h1Status = '❌';
-  } else if (h1Count > 1) {
-    h1Status = '⚠️';
-  }
+  const h1Count = data.content?.summary?.h1Count || 0;
+  let h1Status = h1Count === 1 ? '✅' : h1Count === 0 ? '❌' : '⚠️';
   
   evaluations.h1 = {
     value: `${h1Count} H1 tag${h1Count !== 1 ? 's' : ''} found`,
@@ -78,130 +57,86 @@ function addSEOEvaluations(data, keyword) {
   };
 
   // Images evaluation
-  const imageStats = data.imageAltStats;
+  const imageStats = data.images?.summary;
   if (imageStats) {
-    const missingAlt = imageStats.imagesMissingAlt || 0;
-    const total = imageStats.totalImages || 0;
-    let imageStatus = '✅';
-    
-    if (total > 0 && missingAlt > 0) {
-      imageStatus = '⚠️';
-    }
+    const { total, missingAlt } = imageStats;
+    let imageStatus = total > 0 && missingAlt === 0 ? '✅' : '⚠️';
     
     evaluations.images = {
       value: `${total} images, ${missingAlt} missing alt text`,
-      total: total,
-      missingAlt: missingAlt,
+      total,
+      missingAlt,
       status: imageStatus
     };
   }
 
-  // Keyword frequency evaluation
-  if (keyword && data.keywordFrequency !== undefined) {
-    const freq = data.keywordFrequency;
-    const wordCount = data.wordCount || 1;
-    const density = ((freq / wordCount) * 100).toFixed(2);
-    
+  // Keyword evaluation
+  if (keyword && data.content?.raw?.keywordData) {
+    const kd = data.content.raw.keywordData;
     let status = '✅';
     
-    if (freq === 0) {
-      status = '❌';
-    } else if (data.keywordStuffing) {
-      status = '❌';
-    } else if (parseFloat(density) < 0.5) {
-      status = '⚠️';
-    }
+    if (kd.count === 0) status = '❌';
+    else if (parseFloat(kd.density) > 5) status = '❌';
+    else if (parseFloat(kd.density) < 0.5) status = '⚠️';
     
     evaluations.keywordUsage = {
-      value: `"${keyword}" appears ${freq} times (${density}% density)`,
-      frequency: freq,
-      density: density + '%',
-      status: status
+      value: `"${keyword}" appears ${kd.count} times (${kd.density}% density)`,
+      frequency: kd.count,
+      density: kd.density + '%',
+      status
     };
   }
 
-  // Internal links evaluation
-  const linkStats = data.linkStats;
+  // Links evaluation
+  const linkStats = data.links?.summary;
   if (linkStats) {
-    const internal = linkStats.internalLinks || 0;
-    const external = linkStats.externalLinks || 0;
-    const total = linkStats.totalLinks || 0;
-    
-    let linkStatus = '✅';
-    if (internal === 0) {
-      linkStatus = '❌';
-    } else if (internal < 3) {
-      linkStatus = '⚠️';
-    }
+    const { internal, external, total } = linkStats;
+    let linkStatus = internal >= 3 ? '✅' : internal === 0 ? '❌' : '⚠️';
     
     evaluations.internalLinks = {
       value: `${total} total links (${internal} internal, ${external} external)`,
-      internal: internal,
-      external: external,
-      total: total,
+      internal,
+      external,
+      total,
       status: linkStatus
     };
   }
 
-  // Canonical URL evaluation
-  if (data.metadata?.canonical) {
-    evaluations.canonical = {
-      value: data.metadata.canonical,
-      status: '✅'
-    };
-  } else {
-    evaluations.canonical = {
-      value: 'Not found',
-      status: '❌'
-    };
-  }
+  // Canonical evaluation
+  evaluations.canonical = {
+    value: data.metadata?.raw?.canonical || 'Missing',
+    status: data.metadata?.raw?.canonical ? '✅' : '❌'
+  };
 
-  // Robots meta evaluation
-  if (data.metadata?.robots) {
-    const robots = data.metadata.robots;
-    let robotsStatus = '✅';
-    
-    if (robots.includes('noindex')) {
-      robotsStatus = '⚠️';
-    }
-    
-    evaluations.robots = {
-      value: robots,
-      status: robotsStatus
-    };
-  } else {
-    evaluations.robots = {
-      value: 'Not found (default: index, follow)',
-      status: '✅'
-    };
-  }
+  // Robots evaluation
+  const robots = data.metadata?.raw?.robots;
+  evaluations.robots = {
+    value: robots || 'index, follow (default)',
+    status: robots?.includes('noindex') ? '⚠️' : '✅'
+  };
 
   // Open Graph evaluation
-  const ogTags = data.socialTags?.openGraph || {};
-  const ogCount = Object.keys(ogTags).length;
+  const ogSummary = data.openGraph?.summary;
+  const ogCount = ogSummary ? Object.values(ogSummary).filter(v => v === 'Present').length : 0;
   
   evaluations.openGraph = {
     value: ogCount > 0 ? `${ogCount} Open Graph tags found` : 'No Open Graph tags found',
-    tags: ogTags,
+    tags: data.openGraph?.raw || {},
     status: ogCount > 0 ? '✅' : '❌'
   };
 
   // Structured data evaluation
-  const structuredData = data.structuredData || {};
-  const schemaCount = structuredData.jsonLdScripts?.length || 0;
+  const structuredSummary = data.structuredData?.summary;
+  const schemaCount = structuredSummary?.jsonLdCount || 0;
   
   evaluations.structuredData = {
     value: schemaCount > 0 ? `${schemaCount} JSON-LD scripts found` : 'No structured data found',
     count: schemaCount,
-    types: structuredData.schemaTypes || [],
+    types: structuredSummary?.types || [],
     status: schemaCount > 0 ? '✅' : '❌'
   };
 
-  // Add evaluations to the original data
-  return {
-    ...data,
-    seoEvaluations: evaluations
-  };
+  return { ...data, seoEvaluations: evaluations };
 }
 
 export default async function handler(req, res) {
@@ -214,30 +149,61 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Call comprehensive Cloudflare Worker
-    const workerUrl = `https://seo-audit.itsjaskrn.workers.dev/?url=${encodeURIComponent(url)}`;
-    const finalUrl = keyword ? `${workerUrl}&keyword=${encodeURIComponent(keyword)}` : workerUrl;
-    const userAgentUrl = `${finalUrl}&user-agent=${userAgent}`;
+    // Fetch page content
+    const { html, finalUrl, redirects } = await fetchPage(url, userAgent);
     
-    const workerResponse = await fetch(userAgentUrl);
-    const workerData = await workerResponse.json();
-
-    if (workerData.error) {
-      return res.status(502).json({
-        error: "Worker fetch failed",
-        details: workerData.error
+    // Parse HTML for comprehensive SEO data
+    const parsedData = await parseHtml(html, keyword, finalUrl);
+    
+    // Detect content intent
+    const intent = detectIntent(html);
+    
+    // Extract content sections
+    const sections = extractSections(html);
+    
+    // Generate suggested keywords if none provided
+    let suggestedKeywords = [];
+    if (!keyword) {
+      const title = parsedData.metadata?.raw?.title || "";
+      const description = parsedData.metadata?.raw?.description || "";
+      const h1Text = parsedData.content?.raw?.headings?.h1?.join(" ") || "";
+      
+      const text = `${title} ${description} ${h1Text}`.toLowerCase();
+      const words = text.match(/\b\w{4,}\b/g) || [];
+      const wordCount = {};
+      
+      words.forEach(word => {
+        if (!['this', 'that', 'with', 'have', 'will', 'from', 'they', 'been', 'said', 'each', 'which', 'their', 'time', 'more', 'very', 'what', 'know', 'just', 'first', 'into', 'over', 'think', 'also', 'your', 'work', 'life', 'only', 'can', 'still', 'should', 'after', 'being', 'now', 'made', 'before', 'here', 'through', 'when', 'where', 'much', 'some', 'these', 'many', 'would', 'there'].includes(word)) {
+          wordCount[word] = (wordCount[word] || 0) + 1;
+        }
       });
+      
+      suggestedKeywords = Object.entries(wordCount)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5)
+        .map(([word]) => word);
     }
-
-    // If no keyword provided, return suggested keywords without evaluations
-    if (!keyword && workerData.suggestedKeywords) {
-      return res.status(200).json(workerData);
+    
+    // Combine all data
+    const fullData = {
+      ...parsedData,
+      url: finalUrl,
+      redirects,
+      intent,
+      sections,
+      suggestedKeywords,
+      timestamp: new Date().toISOString()
+    };
+    
+    // If no keyword provided, return data with suggested keywords
+    if (!keyword) {
+      return res.status(200).json(fullData);
     }
-
-    // Add SEO evaluations to the worker data
-    const evaluatedData = addSEOEvaluations(workerData, keyword);
+    
+    // Add SEO evaluations
+    const evaluatedData = addSEOEvaluations(fullData, keyword);
     return res.status(200).json(evaluatedData);
-
+    
   } catch (err) {
     console.error("Full audit failed:", err);
     return res.status(500).json({
