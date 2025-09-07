@@ -85,6 +85,12 @@ function addSEOEvaluations(data, keyword) {
       density: kd.density + '%',
       status
     };
+  } else if (!keyword) {
+    evaluations.keywordUsage = {
+      value: 'No target keyword provided for analysis',
+      status: '⚠️',
+      suggestion: 'Add a target keyword to analyze keyword optimization'
+    };
   }
 
   // Links evaluation
@@ -195,9 +201,13 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     };
     
-    // If no keyword provided, return data with suggested keywords
+    // If no keyword provided, return data with suggested keywords and prompt
     if (!keyword) {
-      return res.status(200).json(fullData);
+      return res.status(200).json({
+        ...fullData,
+        message: "No target keyword provided. Consider using one of the suggested keywords for more detailed SEO analysis.",
+        keywordPrompt: "Would you like to analyze this page with a specific keyword? Add &keyword=YOUR_KEYWORD to the URL for keyword-focused analysis."
+      });
     }
     
     // Add SEO evaluations
