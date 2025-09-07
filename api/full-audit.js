@@ -12,20 +12,28 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing required query parameter: url" });
     }
 
-    // 1. Fetch page + handle redirects
+    // Fetch page safely
     const pageData = await fetchPage(url);
 
-    // 2. Parse HTML for SEO issues
+    // If fetch failed, stop early and return message
+    if (pageData.error || !pageData.html) {
+      return res.status(502).json({
+        error: "Failed to fetch page",
+        details: pageData.error || "Unknown error while fetching page"
+      });
+    }
+
+    // Run SEO analysis
     const seoCheck = await parseHtml(pageData.html);
 
-    // 3. Detect search intent from keyword
+    // Detect intent (only if keyword is passed)
     const intent = keyword ? await detectIntent(keyword, pageData.text) : null;
 
-    // 4. Extract content sections
+    // Extract sections
     const sections = await extractSections(pageData.html);
 
     res.status(200).json({
-      url,
+      url: pageData.finalUrl,
       seoCheck,
       parseHtml: {
         headings: seoCheck.headings || [],
@@ -36,7 +44,10 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error("Full audit failed:", error);
-    res.status(500).json({ error: "Internal server error", details: error.message });
+    console.error("Full audit failed for:", req.query.url, error);
+    res.status(500).json({
+      error: "SEO audit failed",
+      details: error.message
+    });
   }
 }
