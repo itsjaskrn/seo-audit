@@ -1,97 +1,67 @@
-import * as cheerio from "cheerio";
-
 export default async function handler(req, res) {
   const url = req.query.url;
   const keyword = req.query.keyword || "";
+  const userAgent = req.query['user-agent'] || 'chrome';
 
   if (!url) {
     return res.status(400).json({ error: "Missing required query parameter: url" });
   }
 
   try {
-    // Call Cloudflare Worker
-    const workerResponse = await fetch(
-      `https://seo-audit.itsjaskrn.workers.dev/?url=${encodeURIComponent(url)}`
-    );
+    // Call Cloudflare Worker with all parameters
+    const workerUrl = `https://seo-audit.itsjaskrn.workers.dev/?url=${encodeURIComponent(url)}`;
+    const finalUrl = keyword ? `${workerUrl}&keyword=${encodeURIComponent(keyword)}` : workerUrl;
+    const userAgentUrl = `${finalUrl}&user-agent=${userAgent}`;
+    
+    const workerResponse = await fetch(userAgentUrl);
     const workerData = await workerResponse.json();
 
-    if (!workerData.ok) {
+    if (workerData.error) {
       return res.status(502).json({
         error: "Worker fetch failed",
-        details: workerData.error || "Unknown error"
+        details: workerData.error
       });
     }
 
-    const html = workerData.html;
-    const $ = cheerio.load(html);
-
-    // Extract metadata
-    const title = $("title").text().trim() || "";
-    let descriptionSource = "missing";
-    let description =
-      $("meta[name='description']").attr("content")?.trim() ||
-      $("meta[property='og:description']").attr("content")?.trim() ||
-      $("meta[name='twitter:description']").attr("content")?.trim() ||
-      "";
-
-    if ($("meta[name='description']").length) descriptionSource = "meta";
-    else if ($("meta[property='og:description']").length) descriptionSource = "openGraph";
-    else if ($("meta[name='twitter:description']").length) descriptionSource = "twitter";
-
-    // Extract H1s
-    const h1s = [];
-    $("h1").each((i, el) => h1s.push($(el).text().trim()));
-
-    // Extract links
-    const links = [];
-    $("a").each((i, el) => {
-      const href = $(el).attr("href");
-      if (href) links.push(href);
-    });
-
-    // Extract sections
-    const sections = [];
-    $("h1, h2, h3").each((i, el) => {
-      const heading = $(el).text().trim();
-      const next = $(el).nextUntil("h1, h2, h3");
-      const content = next.text().trim();
-      sections.push({ heading, content });
-    });
-
-    // Detect intent (very simple demo)
-    let intent = "Informational";
-    if (keyword) {
-      if (keyword.toLowerCase().includes("buy") || html.includes("price")) {
-        intent = "Transactional";
-      } else if (keyword.toLowerCase().includes("near me") || keyword.toLowerCase().includes("contact")) {
-        intent = "Navigational";
-      }
+    // If no keyword provided, return suggested keywords
+    if (!keyword && workerData.suggestedKeywords) {
+      return res.status(200).json({
+        message: "No focus keyword provided. Would you like to use one of these?",
+        suggestedKeywords: workerData.suggestedKeywords
+      });
     }
 
-    // Issues
-    const issues = [];
-    if (descriptionSource === "missing") {
-      issues.push("Missing meta description");
-    } else if (descriptionSource !== "meta") {
-      issues.push(`Description found in ${descriptionSource}, not in <meta name='description'>`);
-    }
-    if (h1s.length > 1) issues.push("Duplicate H1 tags");
-
-    // Score
-    const seoScore = 85 - issues.length * 5;
-
+    // Return comprehensive SEO audit data from Cloudflare Worker
     return res.status(200).json({
-      url: workerData.finalUrl,
-      status: workerData.status,
-      title,
-      description,
-      descriptionSource,
-      h1s,
-      links,
-      sections,
-      intent,
-      seoScore,
-      issues
+      targetUrl: workerData.targetUrl,
+      redirectChain: workerData.redirectChain || [],
+      hreflangTags: workerData.hreflangTags || [],
+      sitemaps: workerData.sitemaps || [],
+      robotsTxt: workerData.robotsTxt || 'Not found',
+      metadata: workerData.metadata || {},
+      openGraph: workerData.openGraph || {},
+      structuredData: workerData.structuredData || { jsonLdCount: 0, types: [], hasMicrodata: false },
+      wordCount: workerData.wordCount || 0,
+      intent: workerData.intent || 'Unknown',
+      contentSections: workerData.contentSections || [],
+      focusKeyword: workerData.focusKeyword || keyword,
+      keywordFrequency: workerData.keywordFrequency || 0,
+      keywordStuffing: workerData.keywordStuffing || false,
+      detectedBuzzwords: workerData.detectedBuzzwords || [],
+      plainText: workerData.plainText || '',
+      imageAltStats: workerData.imageAltStats || {
+        totalImages: 0,
+        imagesWithAlt: 0,
+        imagesMissingAlt: 0,
+        truncated: false,
+        detailedList: []
+      },
+      anchorTexts: workerData.anchorTexts || [],
+      anchorSummary: workerData.anchorSummary || { totalFound: 0, truncated: false },
+      linkStats: workerData.linkStats || { totalLinks: 0, internalLinks: 0, externalLinks: 0 },
+      headingStats: workerData.headingStats || { h1: 0, h2: 0, h3: 0, h4: 0, h5: 0, h6: 0 },
+      suggestions: workerData.suggestions || [],
+      message: workerData.message || "SEO audit completed successfully"
     });
 
   } catch (err) {
