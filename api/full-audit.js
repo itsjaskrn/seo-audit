@@ -1,42 +1,42 @@
+import fetchPage from "../utils/fetchPage";
+import parseHtml from "../utils/parseHtml";
+import detectIntent from "../utils/detectIntent";
+import extractSections from "../utils/extractSections";
+
 export default async function handler(req, res) {
-  const url = req.query.url || "https://example.com";
-  const keyword = req.query.keyword || "seo audit";
+  try {
+    const url = req.query.url;
+    const keyword = req.query.keyword || "";
 
-  // Mock SEO check
-  const seoCheck = {
-    status: "ok",
-    input: url,
-    seoScore: 85,
-    issues: ["Missing meta description", "Duplicate H1"]
-  };
+    if (!url) {
+      return res.status(400).json({ error: "Missing required query parameter: url" });
+    }
 
-  // Mock parseHtml
-  const parseHtml = {
-    url,
-    headings: ["H1: Example Title", "H2: Subheading"],
-    links: ["https://example.com/about", "https://example.com/contact"]
-  };
+    // 1. Fetch page + handle redirects
+    const pageData = await fetchPage(url);
 
-  // Mock detectIntent
-  const detectIntent = {
-    keyword,
-    intent: "Informational"
-  };
+    // 2. Parse HTML for SEO issues
+    const seoCheck = await parseHtml(pageData.html);
 
-  // Mock extractSections
-  const extractSections = {
-    url,
-    sections: [
-      { heading: "Introduction", content: "This is the intro." },
-      { heading: "Features", content: "Feature details here." }
-    ]
-  };
+    // 3. Detect search intent from keyword
+    const intent = keyword ? await detectIntent(keyword, pageData.text) : null;
 
-  res.status(200).json({
-    url,
-    seoCheck,
-    parseHtml,
-    detectIntent,
-    extractSections
-  });
+    // 4. Extract content sections
+    const sections = await extractSections(pageData.html);
+
+    res.status(200).json({
+      url,
+      seoCheck,
+      parseHtml: {
+        headings: seoCheck.headings || [],
+        links: seoCheck.links || []
+      },
+      detectIntent: intent ? { keyword, intent } : null,
+      extractSections: sections
+    });
+
+  } catch (error) {
+    console.error("Full audit failed:", error);
+    res.status(500).json({ error: "Internal server error", details: error.message });
+  }
 }
