@@ -201,12 +201,20 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     };
     
-    // If no keyword provided, return data with suggested keywords and prompt
+    // If no keyword provided, return only basic data with keyword selection requirement
     if (!keyword) {
       return res.status(200).json({
-        ...fullData,
-        message: "No target keyword provided. Consider using one of the suggested keywords for more detailed SEO analysis.",
-        keywordPrompt: "Would you like to analyze this page with a specific keyword? Add &keyword=YOUR_KEYWORD to the URL for keyword-focused analysis."
+        url: finalUrl,
+        suggestedKeywords,
+        requiresKeyword: true,
+        message: "Target keyword required for SEO analysis. Please select one of the suggested keywords or provide your own.",
+        keywordPrompt: "Add &keyword=YOUR_KEYWORD to the URL to proceed with full SEO analysis.",
+        basicMetadata: {
+          title: parsedData.metadata?.raw?.title || "Missing",
+          description: parsedData.metadata?.raw?.description || "Missing",
+          wordCount: parsedData.content?.summary?.wordCount || 0
+        },
+        timestamp: new Date().toISOString()
       });
     }
     
