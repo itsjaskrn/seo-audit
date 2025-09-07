@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 
-export function extractSections(html) {
+export default function extractSections(html) {
   const $ = cheerio.load(html);
   const sections = [];
 

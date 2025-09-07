@@ -1,4 +1,4 @@
-export function detectIntent(text) {
+export default function detectIntent(text) {
   const lower = text.toLowerCase();
   if (/(buy|purchase|order|discount|coupon|deal)/.test(lower)) return "Transactional";
   if (/(how to|what is|guide|tutorial|tips|learn)/.test(lower)) return "Informational";

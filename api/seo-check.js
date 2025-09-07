@@ -1,6 +1,6 @@
 import { fetchWithRedirects } from "../utils/fetchPage.js";
-import { parseHtml } from "../utils/parseHtml.js";
-import { detectIntent } from "../utils/detectIntent.js";
+import parseHtml from "../utils/parseHtml.js";
+import detectIntent from "../utils/detectIntent.js";
 
 export default async function handler(req, res) {
   try {
@@ -16,8 +16,8 @@ export default async function handler(req, res) {
     const headers = { "User-Agent": "Mozilla/5.0", Accept: "text/html" };
     const { html, redirectChain } = await fetchWithRedirects(targetUrl, headers);
 
-    const parsed = await parseHtml(html, targetUrl, keyword, headers);
-    const intent = detectIntent(parsed.plainText);
+    const parsed = await parseHtml(html);
+    const intent = keyword ? detectIntent(keyword) : null;
 
     res.json({
       targetUrl: targetUrl,

@@ -1,7 +1,7 @@
 import { fetchWithRedirects } from "../utils/fetchPage.js";
-import parseHtml from "../utils/parseHtml";
-import detectIntent from "../utils/detectIntent";
-import extractSections from "../utils/extractSections";
+import parseHtml from "../utils/parseHtml.js";
+import detectIntent from "../utils/detectIntent.js";
+import extractSections from "../utils/extractSections.js";
 
 export default async function handler(req, res) {
   const url = req.query.url;
