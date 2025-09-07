@@ -12,31 +12,25 @@ function addSEOEvaluations(data, keyword) {
     const hasKeyword = keyword && title.toLowerCase().includes(keyword.toLowerCase());
     const length = title.length;
     let status = '✅';
-    let feedback = 'Good';
     
     if (length < 30) {
       status = '⚠️';
-      feedback = 'Too short (recommended: 30-60 characters)';
     } else if (length > 60) {
       status = '⚠️';
-      feedback = 'Too long (recommended: 30-60 characters)';
     } else if (!hasKeyword && keyword) {
       status = '❌';
-      feedback = 'Missing focus keyword';
     }
     
     evaluations.title = {
-      content: title,
-      length: length,
+      value: title,
+      length: `${length} characters`,
       hasKeyword: hasKeyword,
-      status: status,
-      feedback: feedback
+      status: status
     };
   } else {
     evaluations.title = {
-      content: null,
-      status: '❌',
-      feedback: 'Missing title tag'
+      value: 'Not found',
+      status: '❌'
     };
   }
 
@@ -46,84 +40,60 @@ function addSEOEvaluations(data, keyword) {
     const hasKeyword = keyword && desc.toLowerCase().includes(keyword.toLowerCase());
     const length = desc.length;
     let status = '✅';
-    let feedback = 'Good';
     
     if (length < 120) {
       status = '⚠️';
-      feedback = 'Too short (recommended: 120-160 characters)';
     } else if (length > 160) {
       status = '⚠️';
-      feedback = 'Too long (recommended: 120-160 characters)';
     } else if (!hasKeyword && keyword) {
       status = '⚠️';
-      feedback = 'Consider adding focus keyword';
     }
     
     evaluations.metaDescription = {
-      content: desc,
-      length: length,
+      value: desc,
+      length: `${length} characters`,
       hasKeyword: hasKeyword,
-      status: status,
-      feedback: feedback
+      status: status
     };
   } else {
     evaluations.metaDescription = {
-      content: null,
-      status: '❌',
-      feedback: 'Missing meta description'
+      value: 'Not found',
+      status: '❌'
     };
   }
 
   // H1 evaluation
   const h1Count = data.headingStats?.h1 || 0;
-  if (h1Count === 1) {
-    evaluations.h1 = {
-      count: h1Count,
-      status: '✅',
-      feedback: 'Perfect - one H1 tag found'
-    };
-  } else if (h1Count === 0) {
-    evaluations.h1 = {
-      count: h1Count,
-      status: '❌',
-      feedback: 'Missing H1 tag'
-    };
-  } else {
-    evaluations.h1 = {
-      count: h1Count,
-      status: '⚠️',
-      feedback: `Multiple H1 tags found (${h1Count}) - should be only one`
-    };
+  let h1Status = '✅';
+  if (h1Count === 0) {
+    h1Status = '❌';
+  } else if (h1Count > 1) {
+    h1Status = '⚠️';
   }
+  
+  evaluations.h1 = {
+    value: `${h1Count} H1 tag${h1Count !== 1 ? 's' : ''} found`,
+    count: h1Count,
+    status: h1Status
+  };
 
   // Images evaluation
   const imageStats = data.imageAltStats;
   if (imageStats) {
     const missingAlt = imageStats.imagesMissingAlt || 0;
     const total = imageStats.totalImages || 0;
+    let imageStatus = '✅';
     
-    if (total === 0) {
-      evaluations.images = {
-        total: 0,
-        missingAlt: 0,
-        status: '✅',
-        feedback: 'No images found'
-      };
-    } else if (missingAlt === 0) {
-      evaluations.images = {
-        total: total,
-        missingAlt: 0,
-        status: '✅',
-        feedback: 'All images have alt text'
-      };
-    } else {
-      evaluations.images = {
-        total: total,
-        missingAlt: missingAlt,
-        status: '⚠️',
-        feedback: `${missingAlt} out of ${total} images missing alt text`
-      };
+    if (total > 0 && missingAlt > 0) {
+      imageStatus = '⚠️';
     }
+    
+    evaluations.images = {
+      value: `${total} images, ${missingAlt} missing alt text`,
+      total: total,
+      missingAlt: missingAlt,
+      status: imageStatus
+    };
   }
 
   // Keyword frequency evaluation
@@ -133,24 +103,20 @@ function addSEOEvaluations(data, keyword) {
     const density = ((freq / wordCount) * 100).toFixed(2);
     
     let status = '✅';
-    let feedback = 'Good keyword density';
     
     if (freq === 0) {
       status = '❌';
-      feedback = 'Keyword not found in content';
     } else if (data.keywordStuffing) {
       status = '❌';
-      feedback = `Keyword stuffing detected (${freq} times, ${density}% density)`;
     } else if (parseFloat(density) < 0.5) {
       status = '⚠️';
-      feedback = `Low keyword density (${density}% - consider 0.5-2%)`;
     }
     
     evaluations.keywordUsage = {
+      value: `"${keyword}" appears ${freq} times (${density}% density)`,
       frequency: freq,
       density: density + '%',
-      status: status,
-      feedback: feedback
+      status: status
     };
   }
 
@@ -158,26 +124,23 @@ function addSEOEvaluations(data, keyword) {
   const linkStats = data.linkStats;
   if (linkStats) {
     const internal = linkStats.internalLinks || 0;
+    const external = linkStats.externalLinks || 0;
+    const total = linkStats.totalLinks || 0;
     
+    let linkStatus = '✅';
     if (internal === 0) {
-      evaluations.internalLinks = {
-        count: 0,
-        status: '❌',
-        feedback: 'No internal links found - add some for better SEO'
-      };
+      linkStatus = '❌';
     } else if (internal < 3) {
-      evaluations.internalLinks = {
-        count: internal,
-        status: '⚠️',
-        feedback: `Only ${internal} internal links - consider adding more`
-      };
-    } else {
-      evaluations.internalLinks = {
-        count: internal,
-        status: '✅',
-        feedback: 'Good internal linking'
-      };
+      linkStatus = '⚠️';
     }
+    
+    evaluations.internalLinks = {
+      value: `${total} total links (${internal} internal, ${external} external)`,
+      internal: internal,
+      external: external,
+      total: total,
+      status: linkStatus
+    };
   }
 
   // Add evaluations to the original data
