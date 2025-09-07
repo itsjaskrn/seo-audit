@@ -143,6 +143,60 @@ function addSEOEvaluations(data, keyword) {
     };
   }
 
+  // Canonical URL evaluation
+  if (data.metadata?.canonical) {
+    evaluations.canonical = {
+      value: data.metadata.canonical,
+      status: '✅'
+    };
+  } else {
+    evaluations.canonical = {
+      value: 'Not found',
+      status: '❌'
+    };
+  }
+
+  // Robots meta evaluation
+  if (data.metadata?.robots) {
+    const robots = data.metadata.robots;
+    let robotsStatus = '✅';
+    
+    if (robots.includes('noindex')) {
+      robotsStatus = '⚠️';
+    }
+    
+    evaluations.robots = {
+      value: robots,
+      status: robotsStatus
+    };
+  } else {
+    evaluations.robots = {
+      value: 'Not found (default: index, follow)',
+      status: '✅'
+    };
+  }
+
+  // Open Graph evaluation
+  const ogTags = data.socialTags?.openGraph || {};
+  const ogCount = Object.keys(ogTags).length;
+  
+  evaluations.openGraph = {
+    value: ogCount > 0 ? `${ogCount} Open Graph tags found` : 'No Open Graph tags found',
+    tags: ogTags,
+    status: ogCount > 0 ? '✅' : '❌'
+  };
+
+  // Structured data evaluation
+  const structuredData = data.structuredData || {};
+  const schemaCount = structuredData.jsonLdScripts?.length || 0;
+  
+  evaluations.structuredData = {
+    value: schemaCount > 0 ? `${schemaCount} JSON-LD scripts found` : 'No structured data found',
+    count: schemaCount,
+    types: structuredData.schemaTypes || [],
+    status: schemaCount > 0 ? '✅' : '❌'
+  };
+
   // Add evaluations to the original data
   return {
     ...data,
