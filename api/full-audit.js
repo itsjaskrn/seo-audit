@@ -1,6 +1,11 @@
 function addSEOEvaluations(data, keyword) {
   const evaluations = {};
 
+  // Debug log to see what data we're getting
+  console.log('Worker data keys:', Object.keys(data));
+  console.log('Metadata:', data.metadata);
+  console.log('HeadingStats:', data.headingStats);
+
   // Title evaluation
   if (data.metadata?.title) {
     const title = data.metadata.title;
@@ -205,6 +210,11 @@ export default async function handler(req, res) {
         error: "Worker fetch failed",
         details: workerData.error
       });
+    }
+
+    // If no keyword provided, return suggested keywords without evaluations
+    if (!keyword && workerData.suggestedKeywords) {
+      return res.status(200).json(workerData);
     }
 
     // Add SEO evaluations to the worker data
