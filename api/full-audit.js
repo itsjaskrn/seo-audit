@@ -173,21 +173,63 @@ export default async function handler(req, res) {
       const title = parsedData.metadata?.raw?.title || "";
       const description = parsedData.metadata?.raw?.description || "";
       const h1Text = parsedData.content?.raw?.headings?.h1?.join(" ") || "";
+      const bodyText = sections.mainContent || "";
       
-      const text = `${title} ${description} ${h1Text}`.toLowerCase();
-      const words = text.match(/\b\w{4,}\b/g) || [];
+      // Combine all text sources
+      const allText = `${title} ${description} ${h1Text} ${bodyText}`.toLowerCase();
+      
+      // Extract 2-3 word phrases
+      const phrases = [];
+      const words = allText.match(/\b[a-z]{3,}\b/g) || [];
+      
+      // Generate 2-word phrases
+      for (let i = 0; i < words.length - 1; i++) {
+        const phrase = `${words[i]} ${words[i + 1]}`;
+        if (!phrase.match(/\b(the|and|for|are|but|not|you|all|can|had|her|was|one|our|out|day|get|has|him|his|how|its|may|new|now|old|see|two|way|who|boy|did|man|men|put|say|she|too|use)\b/)) {
+          phrases.push(phrase);
+        }
+      }
+      
+      // Generate 3-word phrases
+      for (let i = 0; i < words.length - 2; i++) {
+        const phrase = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
+        if (!phrase.match(/\b(the|and|for|are|but|not|you|all|can|had|her|was|one|our|out|day|get|has|him|his|how|its|may|new|now|old|see|two|way|who|boy|did|man|men|put|say|she|too|use)\b/)) {
+          phrases.push(phrase);
+        }
+      }
+      
+      // Count phrase frequency
+      const phraseCount = {};
+      phrases.forEach(phrase => {
+        phraseCount[phrase] = (phraseCount[phrase] || 0) + 1;
+      });
+      
+      // Get top phrases
+      const topPhrases = Object.entries(phraseCount)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 8)
+        .map(([phrase]) => phrase);
+      
+      // Also get important single words from title and H1
+      const importantText = `${title} ${h1Text}`.toLowerCase();
+      const importantWords = importantText.match(/\b[a-z]{4,}\b/g) || [];
       const wordCount = {};
       
-      words.forEach(word => {
-        if (!['this', 'that', 'with', 'have', 'will', 'from', 'they', 'been', 'said', 'each', 'which', 'their', 'time', 'more', 'very', 'what', 'know', 'just', 'first', 'into', 'over', 'think', 'also', 'your', 'work', 'life', 'only', 'can', 'still', 'should', 'after', 'being', 'now', 'made', 'before', 'here', 'through', 'when', 'where', 'much', 'some', 'these', 'many', 'would', 'there'].includes(word)) {
+      importantWords.forEach(word => {
+        if (!word.match(/\b(this|that|with|have|will|from|they|been|said|each|which|their|time|more|very|what|know|just|first|into|over|think|also|your|work|life|only|still|should|after|being|made|before|here|through|when|where|much|some|these|many|would|there|about|could|other|after|first|never|these|think|where|being|every|great|might|shall|still|those|under|while)\b/)) {
           wordCount[word] = (wordCount[word] || 0) + 1;
         }
       });
       
-      suggestedKeywords = Object.entries(wordCount)
+      const topWords = Object.entries(wordCount)
         .sort(([,a], [,b]) => b - a)
-        .slice(0, 5)
+        .slice(0, 3)
         .map(([word]) => word);
+      
+      // Combine phrases and important words
+      suggestedKeywords = [...topPhrases, ...topWords]
+        .filter((keyword, index, arr) => arr.indexOf(keyword) === index)
+        .slice(0, 6);
     }
     
     // Combine all data
