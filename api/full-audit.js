@@ -1,7 +1,4 @@
-import { fetchWithRedirects } from "../utils/fetchPage.js";
-import parseHtml from "../utils/parseHtml.js";
-import detectIntent from "../utils/detectIntent.js";
-import extractSections from "../utils/extractSections.js";
+import * as cheerio from "cheerio";
 
 export default async function handler(req, res) {
   const url = req.query.url;
@@ -12,73 +9,96 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Fetch page safely
-    // Add protocol if missing
-    let targetUrl = url;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      targetUrl = 'https://' + url;
-    }
+    // Call Cloudflare Worker
+    const workerResponse = await fetch(
+      `https://seo-audit.itsjaskrn.workers.dev/?url=${encodeURIComponent(url)}`
+    );
+    const workerData = await workerResponse.json();
 
-    const { html, redirectChain } = await fetchWithRedirects(targetUrl, {
-      "User-Agent": "Mozilla/5.0", 
-      "Accept": "text/html"
-    });
-    
-    const pageData = { html, text: html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(), finalUrl: targetUrl };
-
-    if (!pageData.html) {
+    if (!workerData.ok) {
       return res.status(502).json({
-        error: "Unable to fetch target site",
-        reason: pageData.error || "Blocked or unreachable",
-        url
+        error: "Worker fetch failed",
+        details: workerData.error || "Unknown error"
       });
     }
 
-    // 2. Parse HTML (wrapped in try/catch)
-    let seoCheck = {};
-    try {
-      seoCheck = await parseHtml(pageData.html);
-    } catch (err) {
-      seoCheck = { error: "HTML parsing failed", details: err.message };
-    }
+    const html = workerData.html;
+    const $ = cheerio.load(html);
 
-    // 3. Detect intent (safe)
-    let intent = null;
-    try {
-      if (keyword) {
-        intent = await detectIntent(keyword, pageData.text);
-      }
-    } catch (err) {
-      intent = { error: "Intent detection failed", details: err.message };
-    }
+    // Extract metadata
+    const title = $("title").text().trim() || "";
+    let descriptionSource = "missing";
+    let description =
+      $("meta[name='description']").attr("content")?.trim() ||
+      $("meta[property='og:description']").attr("content")?.trim() ||
+      $("meta[name='twitter:description']").attr("content")?.trim() ||
+      "";
 
-    // 4. Extract sections (safe)
-    let sections = [];
-    try {
-      sections = await extractSections(pageData.html);
-    } catch (err) {
-      sections = [{ heading: "Error", content: "Section extraction failed" }];
-    }
+    if ($("meta[name='description']").length) descriptionSource = "meta";
+    else if ($("meta[property='og:description']").length) descriptionSource = "openGraph";
+    else if ($("meta[name='twitter:description']").length) descriptionSource = "twitter";
 
-    // ✅ Always return structured JSON
-    return res.status(200).json({
-      url: pageData.finalUrl || url,
-      status: pageData.status || 200,
-      seoCheck,
-      parseHtml: {
-        headings: seoCheck.headings || [],
-        links: seoCheck.links || []
-      },
-      detectIntent: intent,
-      extractSections: sections
+    // Extract H1s
+    const h1s = [];
+    $("h1").each((i, el) => h1s.push($(el).text().trim()));
+
+    // Extract links
+    const links = [];
+    $("a").each((i, el) => {
+      const href = $(el).attr("href");
+      if (href) links.push(href);
     });
 
-  } catch (error) {
-    console.error("Full audit fatal error:", error);
+    // Extract sections
+    const sections = [];
+    $("h1, h2, h3").each((i, el) => {
+      const heading = $(el).text().trim();
+      const next = $(el).nextUntil("h1, h2, h3");
+      const content = next.text().trim();
+      sections.push({ heading, content });
+    });
+
+    // Detect intent (very simple demo)
+    let intent = "Informational";
+    if (keyword) {
+      if (keyword.toLowerCase().includes("buy") || html.includes("price")) {
+        intent = "Transactional";
+      } else if (keyword.toLowerCase().includes("near me") || keyword.toLowerCase().includes("contact")) {
+        intent = "Navigational";
+      }
+    }
+
+    // Issues
+    const issues = [];
+    if (descriptionSource === "missing") {
+      issues.push("Missing meta description");
+    } else if (descriptionSource !== "meta") {
+      issues.push(`Description found in ${descriptionSource}, not in <meta name='description'>`);
+    }
+    if (h1s.length > 1) issues.push("Duplicate H1 tags");
+
+    // Score
+    const seoScore = 85 - issues.length * 5;
+
+    return res.status(200).json({
+      url: workerData.finalUrl,
+      status: workerData.status,
+      title,
+      description,
+      descriptionSource,
+      h1s,
+      links,
+      sections,
+      intent,
+      seoScore,
+      issues
+    });
+
+  } catch (err) {
+    console.error("Full audit failed:", err);
     return res.status(500).json({
-      error: "Full SEO audit crashed",
-      details: error.message,
-      url
+      error: "SEO audit failed",
+      details: err.message
     });
   }
 }
