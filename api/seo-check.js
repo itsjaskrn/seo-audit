@@ -7,14 +7,20 @@ export default async function handler(req, res) {
     const { url, keyword } = req.query;
     if (!url) return res.status(400).json({ error: "Missing url param" });
 
-    const headers = { "User-Agent": "Mozilla/5.0", Accept: "text/html" };
-    const { html, redirectChain } = await fetchWithRedirects(url, headers);
+    // Add protocol if missing
+    let targetUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      targetUrl = 'https://' + url;
+    }
 
-    const parsed = await parseHtml(html, url, keyword, headers);
+    const headers = { "User-Agent": "Mozilla/5.0", Accept: "text/html" };
+    const { html, redirectChain } = await fetchWithRedirects(targetUrl, headers);
+
+    const parsed = await parseHtml(html, targetUrl, keyword, headers);
     const intent = detectIntent(parsed.plainText);
 
     res.json({
-      targetUrl: url,
+      targetUrl: targetUrl,
       redirectChain,
       intent,
       ...parsed,

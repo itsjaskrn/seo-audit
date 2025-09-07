@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vercel dev",
     "start": "node api/seo-check.js"
   },
   "dependencies": {
